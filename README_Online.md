@@ -15,6 +15,8 @@
 
 ---
 
+## [离线版文档](https://github.com/restarhalf/DeerTimer/blob/main/README.md)
+
 ## 简介
 
 DeerTimer 是一个基于 Jetpack Compose 开发的轻量记录工具，用来记录每次“练习”的时长与备注，并提供统计分析、历史记录、排行榜与云同步等功能。
