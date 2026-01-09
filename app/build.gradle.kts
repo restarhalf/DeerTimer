@@ -45,7 +45,7 @@ android {
     android.applicationVariants.all {
         outputs.all {
             if (this is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
-                this.outputFileName = "DeerTimer_release_${versionName}.apk"
+                this.outputFileName = "DeerTimer_offline_${versionName}.apk"
             }
         }
     }
