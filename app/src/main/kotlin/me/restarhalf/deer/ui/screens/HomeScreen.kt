@@ -5,6 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +52,7 @@ import kotlinx.coroutines.launch
 import me.restarhalf.deer.data.Session
 import me.restarhalf.deer.data.SessionDraft
 import me.restarhalf.deer.data.SessionRepository
+import me.restarhalf.deer.data.TimerRepository
 import me.restarhalf.deer.ui.components.TwoTextButtonsRow
 import me.restarhalf.deer.ui.custom.icons.FilledPlay
 import me.restarhalf.deer.ui.custom.icons.Stop
@@ -92,7 +100,10 @@ fun HomeScreen() {
         ?.elapsedSec
         ?.collectAsState(initial = 0)
         ?: remember { mutableIntStateOf(0) }
-    var isTwo by remember { mutableStateOf(false) }
+
+    val timerRepoState by TimerRepository.timerState.collectAsState()
+    val isTwo = timerRepoState.isSessionActive
+
     val isRunning by timerService
         ?.isRunning
         ?.collectAsState(initial = false)
@@ -236,67 +247,90 @@ fun HomeScreen() {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isTwo) {
-                    IconButton(
-                        onClick = {
-                            showConfirmDialog.value = true
-                        },
-                        minWidth = 64.dp,
-                        minHeight = 64.dp,
-                        cornerRadius = 32.dp,
-                        backgroundColor = colorScheme.surfaceContainer
+                AnimatedContent(
+                    targetState = isTwo,
+                    transitionSpec = {
+                        if (targetState) {
+                            (fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.8f))
+                                .togetherWith(fadeOut(animationSpec = tween(300)))
+                        } else {
+                            fadeIn(animationSpec = tween(400))
+                                .togetherWith(
+                                    fadeOut(animationSpec = tween(300)) + scaleOut(
+                                        targetScale = 0.8f
+                                    )
+                                )
+                        }
+                    },
+                    label = "ButtonSplitAnimation"
+                ) { targetIsTwo ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = MiuixIcons.Stop,
-                            contentDescription = "结束",
-                            tint = colorScheme.primary,
-                            modifier = Modifier.size(46.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.size(90.dp))
-
-                    IconButton(
-                        onClick = {
-                            if (isRunning) {
-                                pauseTimer()
-                            } else {
-                                startTimer()
+                        if (targetIsTwo) {
+                            IconButton(
+                                onClick = {
+                                    showConfirmDialog.value = true
+                                },
+                                minWidth = 64.dp,
+                                minHeight = 64.dp,
+                                cornerRadius = 32.dp,
+                                backgroundColor = colorScheme.surfaceContainer
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Stop,
+                                    contentDescription = "结束",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(46.dp)
+                                )
                             }
-                        },
-                        minWidth = 64.dp,
-                        minHeight = 64.dp,
-                        cornerRadius = 32.dp,
-                        backgroundColor = colorScheme.surfaceContainer
-                    ) {
-                        Icon(
-                            imageVector = if (isRunning) MiuixIcons.Pause else MiuixIcons.FilledPlay,
-                            contentDescription = if (isRunning) "暂停" else "继续",
-                            tint = colorScheme.primary,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = {
-                            startTimer()
-                            isTwo = true
-                        },
-                        minWidth = 160.dp,
-                        minHeight = 64.dp,
-                        cornerRadius = 32.dp,
-                        backgroundColor = colorScheme.surfaceContainer
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.FilledPlay,
-                                contentDescription = "开始",
-                                tint = colorScheme.primary,
-                                modifier = Modifier.size(30.dp)
-                            )
+
+                            Spacer(modifier = Modifier.size(90.dp))
+
+                            IconButton(
+                                onClick = {
+                                    if (isRunning) {
+                                        pauseTimer()
+                                    } else {
+                                        startTimer()
+                                    }
+                                },
+                                minWidth = 64.dp,
+                                minHeight = 64.dp,
+                                cornerRadius = 32.dp,
+                                backgroundColor = colorScheme.surfaceContainer
+                            ) {
+                                Icon(
+                                    imageVector = if (isRunning) MiuixIcons.Pause else MiuixIcons.FilledPlay,
+                                    contentDescription = if (isRunning) "暂停" else "继续",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    startTimer()
+                                    TimerRepository.setSessionActive(context, true)
+                                },
+                                minWidth = 160.dp,
+                                minHeight = 64.dp,
+                                cornerRadius = 32.dp,
+                                backgroundColor = colorScheme.surfaceContainer
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.FilledPlay,
+                                        contentDescription = "开始",
+                                        tint = colorScheme.primary,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -337,7 +371,7 @@ fun HomeScreen() {
                 showDetailsDialog = false
 
                 stopTimer()
-                isTwo = false
+                TimerRepository.setSessionActive(context, false)
             },
             onDismiss = { showDetailsDialog = false }
         )

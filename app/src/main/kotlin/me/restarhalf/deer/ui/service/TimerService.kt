@@ -22,8 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.restarhalf.deer.MainActivity
 import me.restarhalf.deer.R
+import me.restarhalf.deer.data.TimerRepository
 import me.restarhalf.deer.ui.util.NotificationUtil
-import me.restarhalf.deer.ui.util.formatTime
 
 
 class TimerService : Service() {
@@ -36,6 +36,21 @@ class TimerService : Service() {
 
     private var startTimeMs: Long = 0L
     private var accumulatedSec: Int = 0
+
+    override fun onCreate() {
+        super.onCreate()
+        val state = TimerRepository.timerState.value
+        accumulatedSec = state.accumulatedSeconds
+        startTimeMs = state.startTimeMillis
+        _isRunning.value = state.isRunning
+        if (state.isRunning && startTimeMs != 0L) {
+            val nowMs = SystemClock.elapsedRealtime()
+            _elapsedSec.value = accumulatedSec + ((nowMs - startTimeMs) / 1000).toInt()
+            handler.post(tickRunnable)
+        } else {
+            _elapsedSec.value = accumulatedSec
+        }
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val tickRunnable = object : Runnable {
@@ -70,6 +85,7 @@ class TimerService : Service() {
             startTimeMs = SystemClock.elapsedRealtime()
         }
         _isRunning.value = true
+        TimerRepository.updateState(this, accumulatedSec, startTimeMs, true)
         handler.removeCallbacks(tickRunnable)
         handler.post(tickRunnable)
         val notif = buildNotification(_elapsedSec.value)
@@ -82,6 +98,7 @@ class TimerService : Service() {
         }.onFailure {
             handler.removeCallbacks(tickRunnable)
             _isRunning.value = false
+            TimerRepository.updateState(this, accumulatedSec, startTimeMs, false)
         }
     }
 
@@ -91,6 +108,7 @@ class TimerService : Service() {
         accumulatedSec = _elapsedSec.value
         startTimeMs = 0L
         _isRunning.value = false
+        TimerRepository.updateState(this, accumulatedSec, startTimeMs, false)
         runCatching { stopForegroundCompat(removeNotification = false) }
         updateNotification(_elapsedSec.value)
     }
@@ -101,14 +119,13 @@ class TimerService : Service() {
         startTimeMs = 0L
         _elapsedSec.value = 0
         _isRunning.value = false
+        TimerRepository.clear(this)
         runCatching { stopForegroundCompat(removeNotification = true) }
         runCatching { NotificationManagerCompat.from(this).cancel(NOTIF_ID) }
         stopSelf()
     }
 
     private fun buildNotification(elapsed: Int): Notification {
-        val contentText = formatTime(elapsed)
-
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -116,12 +133,15 @@ class TimerService : Service() {
         val openAppPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags)
 
         return NotificationCompat.Builder(this, NotificationUtil.CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentTitle(if (_isRunning.value) "计时进行中" else "计时已暂停")
-            .setContentText(contentText)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(_isRunning.value)
             .setOnlyAlertOnce(true)
+            .setShowWhen(true)
+            .setUsesChronometer(_isRunning.value)
+            .setChronometerCountDown(false)
+            .setWhen(System.currentTimeMillis() - (elapsed * 1000L))
             .build()
     }
 
