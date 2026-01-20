@@ -26,7 +26,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -383,8 +382,8 @@ fun StatisticsScreen() {
                                     modifier = Modifier.padding(top = 6.dp)
                                 )
 
-                                val statusText by remember(totalCount) {
-                                    mutableStateOf(buildTotalStatStatus(totalCount))
+                                val statusText = remember(totalCount) {
+                                    buildTotalStatStatus(totalCount)
                                 }
                                 Text(
                                     text = statusText,
