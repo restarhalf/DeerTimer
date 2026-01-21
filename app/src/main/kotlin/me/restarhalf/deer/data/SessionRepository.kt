@@ -2,11 +2,13 @@ package me.restarhalf.deer.data
 
 import android.content.Context
 import androidx.core.content.edit
-import com.squareup.moshi.JsonReader
-import com.squareup.moshi.JsonWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okio.Buffer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -26,51 +28,40 @@ object SessionRepository {
     private const val PREFS_NAME = "sessions_prefs"
     private const val KEY_SESSIONS = "sessions"
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    private val json = AppHttp.json
 
     fun encodeSessions(sessions: List<Session>): String {
-        val buffer = Buffer()
-        val writer = JsonWriter.of(buffer)
-        writer.beginArray()
-        for (session in sessions) {
-            writer.beginArray()
-            writer.value(session.timestamp.format(formatter))
-            writer.value(session.duration)
-            writer.value(session.remark)
-            writer.value(session.location)
-            writer.value(session.watchedMovie)
-            writer.value(session.climax)
-            writer.value(session.rating)
-            writer.value(session.mood)
-            writer.value(session.props)
-            writer.endArray()
+        val array = buildJsonArray {
+            for (session in sessions) {
+                add(
+                    buildJsonArray {
+                        add(JsonPrimitive(session.timestamp.format(formatter)))
+                        add(JsonPrimitive(session.duration))
+                        add(JsonPrimitive(session.remark))
+                        add(JsonPrimitive(session.location))
+                        add(JsonPrimitive(session.watchedMovie))
+                        add(JsonPrimitive(session.climax))
+                        add(JsonPrimitive(session.rating))
+                        add(JsonPrimitive(session.mood))
+                        add(JsonPrimitive(session.props))
+                    }
+                )
+            }
         }
-        writer.endArray()
-        return buffer.readUtf8()
+        return json.encodeToString(JsonElement.serializer(), array)
     }
 
     fun decodeSessions(jsonStr: String): List<Session> {
-        val reader = JsonReader.of(Buffer().writeUtf8(jsonStr))
-        return runCatching {
-            val list = mutableListOf<Session>()
-            reader.beginArray()
-            while (reader.hasNext()) {
-                val session = readSession(reader)
-                if (session != null) list.add(session)
-            }
-            reader.endArray()
-            list
-        }.getOrElse { emptyList() }
+        val element = runCatching { json.parseToJsonElement(jsonStr) }
+            .getOrNull()
+            ?: return emptyList()
+        val array = element as? JsonArray ?: return emptyList()
+        return array.mapNotNull { readSession(it) }
     }
 
-    private fun readSession(reader: JsonReader): Session? {
-        if (reader.peek() == JsonReader.Token.NULL) {
-            reader.nextNull<Unit>()
-            return null
-        }
-
-        reader.beginArray()
-        var index = 0
-
+    private fun readSession(element: JsonElement): Session? {
+        if (element is JsonNull) return null
+        val array = element as? JsonArray ?: return null
         var timeStr: String? = null
         var dur = 0
         var rem = ""
@@ -81,22 +72,20 @@ object SessionRepository {
         var mood = ""
         var props = ""
 
-        while (reader.hasNext()) {
+        for ((index, item) in array.withIndex()) {
             when (index) {
-                0 -> timeStr = readStringOrNull(reader)
-                1 -> dur = readInt(reader)
-                2 -> rem = readString(reader)
-                3 -> loc = readString(reader)
-                4 -> watched = readBoolean(reader)
-                5 -> climaxed = readBoolean(reader)
-                6 -> rate = readFloat(reader).coerceIn(0f, 5f)
-                7 -> mood = readString(reader)
-                8 -> props = readString(reader)
-                else -> reader.skipValue()
+                0 -> timeStr = readStringOrNull(item)
+                1 -> dur = readInt(item)
+                2 -> rem = readString(item)
+                3 -> loc = readString(item)
+                4 -> watched = readBoolean(item)
+                5 -> climaxed = readBoolean(item)
+                6 -> rate = readFloat(item).coerceIn(0f, 5f)
+                7 -> mood = readString(item)
+                8 -> props = readString(item)
+                else -> Unit
             }
-            index++
         }
-        reader.endArray()
 
         val parsedTime = timeStr?.takeIf { it.isNotBlank() }
             ?.let { runCatching { LocalDateTime.parse(it, formatter) }.getOrNull() }
@@ -115,78 +104,42 @@ object SessionRepository {
         )
     }
 
-    private fun readStringOrNull(reader: JsonReader): String? {
-        return when (reader.peek()) {
-            JsonReader.Token.NULL -> {
-                reader.nextNull<Unit>()
-                null
-            }
-
-            JsonReader.Token.STRING -> reader.nextString()
-            else -> {
-                reader.skipValue()
-                null
-            }
-        }
+    private fun readStringOrNull(element: JsonElement?): String? {
+        val primitive = element as? JsonPrimitive ?: return null
+        return if (primitive.isString) primitive.content else null
     }
 
-    private fun readString(reader: JsonReader): String {
-        return readStringOrNull(reader) ?: ""
+    private fun readString(element: JsonElement?): String {
+        return readStringOrNull(element) ?: ""
     }
 
-    private fun readInt(reader: JsonReader): Int {
-        return when (reader.peek()) {
-            JsonReader.Token.NULL -> {
-                reader.nextNull<Unit>()
-                0
-            }
-
-            JsonReader.Token.NUMBER -> reader.nextDouble().toInt()
-            JsonReader.Token.STRING -> reader.nextString().toIntOrNull() ?: 0
-            JsonReader.Token.BOOLEAN -> if (reader.nextBoolean()) 1 else 0
-            else -> {
-                reader.skipValue()
-                0
-            }
-        }
+    private fun readInt(element: JsonElement?): Int {
+        val primitive = element as? JsonPrimitive ?: return 0
+        val content = primitive.content
+        if (primitive.isString) return content.toIntOrNull() ?: 0
+        content.toIntOrNull()?.let { return it }
+        content.toDoubleOrNull()?.let { return it.toInt() }
+        return if (content.equals("true", ignoreCase = true) || content == "1") 1 else 0
     }
 
-    private fun readFloat(reader: JsonReader): Float {
-        return when (reader.peek()) {
-            JsonReader.Token.NULL -> {
-                reader.nextNull<Unit>()
-                0f
-            }
-
-            JsonReader.Token.NUMBER -> reader.nextDouble().toFloat()
-            JsonReader.Token.STRING -> reader.nextString().toFloatOrNull() ?: 0f
-            JsonReader.Token.BOOLEAN -> if (reader.nextBoolean()) 1f else 0f
-            else -> {
-                reader.skipValue()
-                0f
-            }
-        }
+    private fun readFloat(element: JsonElement?): Float {
+        val primitive = element as? JsonPrimitive ?: return 0f
+        val content = primitive.content
+        if (primitive.isString) return content.toFloatOrNull() ?: 0f
+        content.toFloatOrNull()?.let { return it }
+        return if (content.equals("true", ignoreCase = true) || content == "1") 1f else 0f
     }
 
-    private fun readBoolean(reader: JsonReader): Boolean {
-        return when (reader.peek()) {
-            JsonReader.Token.NULL -> {
-                reader.nextNull<Unit>()
-                false
-            }
-
-            JsonReader.Token.BOOLEAN -> reader.nextBoolean()
-            JsonReader.Token.NUMBER -> reader.nextDouble() != 0.0
-            JsonReader.Token.STRING -> {
-                val s = reader.nextString()
-                s.equals("true", ignoreCase = true) || s == "1"
-            }
-
-            else -> {
-                reader.skipValue()
-                false
-            }
+    private fun readBoolean(element: JsonElement?): Boolean {
+        val primitive = element as? JsonPrimitive ?: return false
+        val content = primitive.content
+        if (primitive.isString) {
+            return content.equals("true", ignoreCase = true) || content == "1"
         }
+        if (content.equals("true", ignoreCase = true)) return true
+        if (content.equals("false", ignoreCase = true)) return false
+        content.toDoubleOrNull()?.let { return it != 0.0 }
+        return content == "1"
     }
 
     suspend fun loadSessions(context: Context): List<Session> = withContext(Dispatchers.IO) {
@@ -203,14 +156,14 @@ object SessionRepository {
             }
         }
 
-    fun saveSessionsJson(context: Context, jsonStr: String) {
+    suspend fun saveSessionsJson(context: Context, jsonStr: String) = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit {
             putString(KEY_SESSIONS, jsonStr)
         }
     }
 
-    fun clearSessions(context: Context) {
+    suspend fun clearSessions(context: Context) = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit {
             remove(KEY_SESSIONS)

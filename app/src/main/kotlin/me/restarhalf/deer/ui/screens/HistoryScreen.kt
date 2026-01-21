@@ -98,7 +98,9 @@ fun HistoryScreen() {
                     val imported = SessionRepository.decodeSessions(jsonStr)
                     sessions.clear()
                     sessions.addAll(imported)
-                    SessionRepository.saveSessionsJson(context, jsonStr)
+                    scope.launch {
+                        SessionRepository.saveSessionsJson(context, jsonStr)
+                    }
                 }
         }
     }
@@ -272,7 +274,9 @@ fun HistoryScreen() {
                     rightText = "删除",
                     onRightClick = {
                         sessions.clear()
-                        SessionRepository.clearSessions(context)
+                        scope.launch {
+                            SessionRepository.clearSessions(context)
+                        }
                         showClearDialog.value = false
                     },
                 )

@@ -119,7 +119,7 @@ private val licenseList = listOf(
     ),
     LicenseItem(
         "Google",
-        "AndroidX Lifecycle Runtime KTX",
+        "AndroidX Lifecycle",
         "https://developer.android.com/jetpack/androidx/releases/lifecycle",
         LicenseType.Apache2
     ),
@@ -154,9 +154,9 @@ private val licenseList = listOf(
         LicenseType.Apache2
     ),
     LicenseItem(
-        "square",
-        "Moshi",
-        "https://github.com/square/moshi",
+        "JetBrains",
+        "Kotlinx Serialization",
+        "https://github.com/Kotlin/kotlinx.serialization",
         LicenseType.Apache2
     ),
     LicenseItem(
@@ -178,17 +178,17 @@ private val licenseList = listOf(
         LicenseType.Apache2
     ),
     LicenseItem(
+        "coil",
+        "Coil3",
+        "https://github.com/coil-kt/coil",
+        LicenseType.Apache2
+    ),
+    LicenseItem(
         "LuckSiege",
         "PictureSelector",
         "https://github.com/LuckSiege/PictureSelector",
         LicenseType.Apache2
     ),
-    LicenseItem(
-        "coil",
-        "Coil3",
-        "https://github.com/coil-kt/coil",
-        LicenseType.Apache2
-    )
 )
 
 data class LicenseItem(

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 val appVersionName = "v1.0.3"
@@ -63,7 +64,7 @@ dependencies {
     implementation(libs.pictureselector)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.moshi.kotlin)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil3.coil.compose)
     implementation(libs.okhttp)
 

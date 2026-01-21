@@ -1,18 +1,20 @@
 package me.restarhalf.deer.ui.util
 
-import com.squareup.moshi.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import me.restarhalf.deer.data.AppHttp
 import okhttp3.Request
 
+@Serializable
 data class GitHubRelease(
-    @param:Json(name = "tag_name") val tagName: String?,
-    @param:Json(name = "name") val releaseName: String?
+    @SerialName("tag_name") val tagName: String?,
+    @SerialName("name") val releaseName: String?
 )
 
 object UpdateChecker {
-    private val adapter = AppHttp.moshi.adapter(GitHubRelease::class.java)
+    private val json = AppHttp.json
 
     suspend fun fetchLatestVersion(owner: String, repo: String): String? =
         withContext(Dispatchers.IO) {
@@ -20,12 +22,15 @@ object UpdateChecker {
                 AppHttp.client.newCall(
                     Request.Builder()
                         .url("https://api.github.com/repos/$owner/$repo/releases/latest")
-                        .header("User-Agent", "MyApp/1.0")
+                        .header("User-Agent", "DeerTimer/1.0")
                         .build()
                 ).execute().use { resp ->
                     if (!resp.isSuccessful) return@withContext null
-                    val body = resp.body.string()
-                    val parsed = adapter.fromJson(body) ?: return@withContext null
+                    val body = resp.body.string().orEmpty()
+                    if (body.isBlank()) return@withContext null
+                    val parsed = runCatching { json.decodeFromString<GitHubRelease>(body) }
+                        .getOrNull()
+                        ?: return@withContext null
                     parsed.tagName ?: parsed.releaseName
                 }
             } catch (e: Exception) {
